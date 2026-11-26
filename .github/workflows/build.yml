@@ -1,165 +1,27 @@
-import 'dart:convert';
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:video_player/video_player.dart';
-import 'package:http/http.dart' as http;
-
-void main() => runApp(const ChrisTokApp());
-
-class ChrisTokApp extends StatelessWidget {
-  const ChrisTokApp({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'ChrisTok',
-      theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: Colors.black),
-      home: const MainPage(),
-    );
-  }
-}
-
-class VideoItem {
-  final String url; final String caption; final String user;
-  VideoItem({required this.url, required this.caption, required this.user});
-}
-
-class MainPage extends StatefulWidget {
-  const MainPage({super.key});
-  @override
-  State<MainPage> createState() => _MainPageState();
-}
-
-class _MainPageState extends State<MainPage> {
-  int tab = 0;
-  bool uploading = false;
-  List<VideoItem> videos = [
-    VideoItem(url: 'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4', caption: 'Welcome to ChrisTok 🇺🇬 #Uganda', user: '@christok'),
-    VideoItem(url: 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4', caption: 'First video on ChrisTok! 🔥', user: '@marvin'),
-    VideoItem(url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', caption: 'Big Buck Bunny 🐰 #funny', user: '@uganda_boy'),
-    VideoItem(url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', caption: 'Elephants Dream 🐘 #viral', user: '@kampala_girl'),
-    VideoItem(url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', caption: 'For Bigger Blazes 🔥', user: '@chris'),
-    VideoItem(url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', caption: 'Escape time! 🌍 #travel', user: '@marvin256'),
-  ];
-
-  Future<void> pickAndUpload() async {
-    final XFile? file = await ImagePicker().pickVideo(source: ImageSource.gallery);
-    if (file == null) return;
-    setState(() => uploading = true);
-    try {
-      var req = http.MultipartRequest('POST', Uri.parse('https://api.cloudinary.com/v1_1/lkb5goug/video/upload'));
-      req.fields['upload_preset'] = 'K-group company';
-      req.files.add(await http.MultipartFile.fromPath('file', file.path));
-      var res = await req.send();
-      var body = await res.stream.bytesToString();
-      var url = jsonDecode(body)['secure_url'] ?? '';
-      if (url != '') {
-        setState(() { videos.insert(0, VideoItem(url: url, caption: 'My new video 🔥 #ChrisTok', user: '@you')); tab = 0; });
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Uploaded! 🎉 It is now at the TOP of feed')));
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $body')));
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-    }
-    setState(() => uploading = false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: tab == 0
-          ? PageView.builder(
-              scrollDirection: Axis.vertical,
-              itemCount: videos.length,
-              itemBuilder: (context, i) => VideoCard(video: videos[i]),
-            )
-          : ProfilePage(myVideos: videos.where((v) => v.user == '@you').toList()),
-      floatingActionButton: tab == 0 ? FloatingActionButton(
-        backgroundColor: Colors.red,
-        onPressed: uploading ? null : pickAndUpload,
-        child: uploading ? const CircularProgressIndicator(color: Colors.white) : const Icon(Icons.add),
-      ) : null,
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Colors.black, selectedItemColor: Colors.white, unselectedItemColor: Colors.grey,
-        currentIndex: tab,
-        onTap: (i) {
-          if (i == 1) { pickAndUpload(); return; }
-          setState(() => tab = i == 2 ? 1 : 0);
-        },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.add_box), label: 'Upload'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-        ],
-      ),
-    );
-  }
-}
-
-class ProfilePage extends StatelessWidget {
-  final List<VideoItem> myVideos;
-  const ProfilePage({super.key, required this.myVideos});
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(child: Column(children: [
-      const SizedBox(height: 20),
-      const CircleAvatar(radius: 50, backgroundColor: Colors.red, child: Icon(Icons.person, size: 60, color: Colors.white)),
-      const SizedBox(height: 12),
-      const Text('@you', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-      const Text('ChrisTok Creator 🇺🇬', style: TextStyle(color: Colors.grey)),
-      const SizedBox(height: 16),
-      Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-        _stat('${myVideos.length}', 'Videos'),
-        _stat('1.2K', 'Followers'),
-        _stat('340', 'Following'),
-        _stat('5.6K', 'Likes'),
-      ]),
-      const SizedBox(height: 20),
-      const Divider(color: Colors.grey),
-      const Padding(padding: EdgeInsets.all(12), child: Align(alignment: Alignment.centerLeft, child: Text('My Videos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)))),
-      Expanded(child: myVideos.isEmpty
-          ? const Center(child: Text('No videos yet.\nTap + Upload to add one!', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)))
-          : ListView.builder(itemCount: myVideos.length, itemBuilder: (c, i) => ListTile(leading: const Icon(Icons.play_circle_fill, color: Colors.red, size: 40), title: Text(myVideos[i].caption), subtitle: Text(myVideos[i].user)))),
-    ]));
-  }
-  Widget _stat(String n, String l) => Column(children: [Text(n, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)), Text(l, style: const TextStyle(color: Colors.grey))]);
-}
-
-class VideoCard extends StatefulWidget {
-  final VideoItem video; const VideoCard({super.key, required this.video});
-  @override
-  State<VideoCard> createState() => _VideoCardState();
-}
-
-class _VideoCardState extends State<VideoCard> {
-  VideoPlayerController? c; bool liked = false; int likes = 124;
-  @override
-  void initState() {
-    super.initState();
-    c = VideoPlayerController.networkUrl(Uri.parse(widget.video.url))
-      ..initialize().then((_) { setState(() {}); c!.setLooping(true); c!.play(); });
-  }
-  @override
-  void dispose() { c?.dispose(); super.dispose(); }
-  @override
-  Widget build(BuildContext context) {
-    return Stack(children: [
-      Center(child: c != null && c!.value.isInitialized ? AspectRatio(aspectRatio: c!.value.aspectRatio, child: VideoPlayer(c!)) : const CircularProgressIndicator(color: Colors.red)),
-      Positioned(left: 12, bottom: 80, right: 80, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(widget.video.user, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-        const SizedBox(height: 6),
-        Text(widget.video.caption, style: const TextStyle(fontSize: 14)),
-      ])),
-      Positioned(right: 12, bottom: 100, child: Column(children: [
-        IconButton(icon: Icon(liked ? Icons.favorite : Icons.favorite_border, color: liked ? Colors.red : Colors.white, size: 32), onPressed: () => setState(() { liked = !liked; likes += liked ? 1 : -1; })),
-        Text('$likes'),
-        const SizedBox(height: 16),
-        const Icon(Icons.comment, size: 30), const Text('12'),
-        const SizedBox(height: 16),
-        const Icon(Icons.share, size: 30), const Text('Share'),
-      ])),
-      const Positioned(top: 40, left: 0, right: 0, child: Center(child: Text('ChrisTok', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)))),
-    ]);
-  }
-}
+name: Build ChrisTok APK
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+      - run: cp lib/main.dart /tmp/main.dart.bak
+      - run: flutter create --project-name christok --org com.christok.app .
+      - run: cp /tmp/main.dart.bak lib/main.dart
+      - run: flutter pub get
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: christok-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
